@@ -1,7 +1,51 @@
 #!/bin/sh
 
-current_time=$(date +%s.%N)
-current_ram_usage=$(free -b | awk '/Mem/{printf("%.2f"), $3/$2*100}')
-payload="{\"timestamp\": $current_time, \"ram_percent\": $current_ram_usage}"
+CLOUDWATCH_HOST="http://169.254.169.254"
+RAM_ENDPOINT="/api/cloudwatch/put-ram-metric"
+GPU_ENDPOINT="/api/cloudwatch/put-gpu-metric"
 
-curl -d "$payload" -H "Content-Type: application/json" http://169.254.169.254/api/cloudwatch/put-ram-metric
+send_ram_metric() {
+    current_time=$(date +%s.%N)
+    current_ram_usage=$(free | awk '/Mem/{printf("%.2f"), $3/$2*100}')
+    payload="{\"timestamp\": $current_time, \"ram_percent\": $current_ram_usage}"
+
+    curl -s -d "$payload" -H "Content-Type: application/json" "${CLOUDWATCH_HOST}${RAM_ENDPOINT}"
+}
+
+send_gpu_metrics() {
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        return 0
+    fi
+
+    gpu_metrics=$(nvidia-smi --query-gpu=utilization.gpu,utilization.memory --format=csv,noheader,nounits 2>/dev/null)
+
+    [ -z "$gpu_metrics" ] && return 0
+
+    avg_metrics=$(echo "$gpu_metrics" | awk -F',' '
+        {
+            gpu += $1
+            memory += $2
+            count += 1
+        }
+        END {
+            printf("%.0f %.0f", gpu / count, memory / count)
+        }
+    ')
+
+    utilization_gpu=$(echo "$avg_metrics" | awk '{print $1}')
+    utilization_gpu_memory=$(echo "$avg_metrics" | awk '{print $2}')
+
+    current_time=$(date +%s.%N)
+    payload="{\"timestamp\": $current_time, \"utilization_gpu\": $utilization_gpu, \"utilization_gpu_memory\": $utilization_gpu_memory}"
+
+    curl -s -d "$payload" -H "Content-Type: application/json" "${CLOUDWATCH_HOST}${GPU_ENDPOINT}"
+}
+
+main() {
+    send_ram_metric &
+    send_gpu_metrics &
+
+    wait
+}
+
+main
