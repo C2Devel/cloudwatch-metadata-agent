@@ -3,7 +3,7 @@
 
 Name:      %{pkgname}
 
-Version:   0.1.0
+Version:   0.2.0
 Release:   ROCKIT1%{?buildid}%{?dist}
 Summary:   Active CloudWatch agent for sending metric data via metadata API
 
