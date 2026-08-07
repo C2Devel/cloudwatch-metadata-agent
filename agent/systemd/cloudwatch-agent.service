@@ -1,5 +1,5 @@
 [Unit]
-Description=Regularly send RAM usage metrics via metadata API
+Description=Regularly send RAM and GPU usage metrics via metadata API
 Wants=cloudwatch-agent.timer
 
 [Service]
